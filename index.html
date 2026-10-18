@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lahore Master Transit Tracker & Google Journey Planner</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-sans transition-colors duration-200">
+
+    <!-- Top Navigation -->
+    <header class="bg-emerald-700 dark:bg-emerald-900 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-train-subway text-2xl"></i>
+                <span class="text-xl font-bold">Lahore Transit & Google Planner</span>
+            </div>
+            <div class="flex items-center space-x-3">
+                <!-- Dark Mode Toggle Button -->
+                <button onclick="toggleDarkMode()" class="bg-emerald-800 dark:bg-emerald-700 hover:bg-emerald-900 px-3 py-1.5 rounded-full text-xs font-semibold flex items-center space-x-1 transition cursor-pointer">
+                    <i id="darkModeIcon" class="fa-solid fa-moon"></i> <span id="darkModeText">Dark Mode</span>
+                </button>
+                <div class="text-xs bg-emerald-800 px-3 py-1 rounded-full hidden sm:block">
+                    <span class="inline-block w-2 h-2 bg-green-400 rounded-full animate-pulse mr-1"></span> Live GPS Active
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Layout -->
+    <div class="container mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Left Column: Mode Switcher (Tracker vs Google Journey Planner) -->
+        <div class="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 lg:col-span-1 flex flex-col h-[82vh]">
+            
+            <!-- Tab Navigation Buttons -->
+            <div class="grid grid-cols-2 gap-2 mb-4 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+                <button onclick="switchTab('tracker')" id="tabTrackerBtn" class="py-2 text-xs font-bold rounded-md bg-white dark:bg-gray-600 shadow-sm transition cursor-pointer">Route Tracker</button>
+                <button onclick="switchTab('planner')" id="tabPlannerBtn" class="py-2 text-xs font-bold rounded-md text-gray-500 dark:text-gray-300 transition cursor-pointer">Google Planner</button>
+            </div>
+
+            <!-- VIEW A: Route Tracker (With All Original Stops) -->
+            <div id="trackerView" class="flex flex-col flex-1 overflow-hidden">
+                <h2 class="text-md font-semibold mb-2"><i class="fa-solid fa-route mr-2 text-emerald-600"></i>Select Transit Line</h2>
+                <select id="routeSelect" onchange="switchRoute()" class="w-full p-2.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg mb-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                    <option value="electricThokar">🟢 Electric Bus: Khaira Pull to Thokar</option>
+                    <option value="speedoShalimar">🔴 Speedo Bus: Shalamar to Khaira Pull</option>
+                    <option value="metrobus">🟠 Metrobus: Shahdara to Gajjumata</option>
+                    <option value="orangeTrain">🚆 Orange Line Train: Ali Town to Dera Gujran</option>
+                </select>
+
+                <!-- Frequency & Live Countdown Box -->
+                <div class="p-3 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg mb-3 text-xs text-emerald-800 dark:text-emerald-300 space-y-1">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold"><i class="fa-solid fa-bus mr-1"></i> Active Vehicle: <span id="fleetIdText">EL-26</span></span>
+                        <span class="bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold text-[10px]" id="liveCountdownBadge">Arriving in: 3m 45s</span>
+                    </div>
+                    <div id="frequencyText" class="text-[11px] text-emerald-700 dark:text-emerald-400">Every 10 mins operating frequency</div>
+                </div>
+
+                <!-- Stop Search Bar -->
+                <div class="relative mb-2">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
+                    <input type="text" id="stopSearch" onkeyup="filterStops()" placeholder="Search station name..." class="w-full pl-9 pr-3 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+
+                <h3 class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Stations Sequence (All Stops Included)</h3>
+                <div id="stopList" class="overflow-y-auto flex-1 space-y-2 pr-1"></div>
+            </div>
+
+            <!-- VIEW B: Google Maps Live Journey Planner with Autocomplete -->
+            <div id="plannerView" class="hidden flex flex-col flex-1 overflow-y-auto space-y-3">
+                <h2 class="text-md font-semibold"><i class="fa-solid fa-compass mr-2 text-emerald-600"></i>Google Transit Planner</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Auto-detects your current GPS location and finds the best public transit route in Lahore.</p>
+                
+                <div>
+                    <label class="text-xs font-bold text-gray-600 dark:text-gray-300 mb-1 block">Starting From (Your GPS):</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="startLocation" value="Detecting current location..." class="w-full p-2.5 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 rounded-lg text-xs focus:outline-none font-medium text-gray-600 dark:text-gray-300" readonly>
+                        <button onclick="detectUserGPSLocation()" title="Refresh GPS" class="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-lg text-xs cursor-pointer transition">
+                            <i class="fa-solid fa-location-crosshairs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-gray-600 dark:text-gray-300 mb-1 block">Going To (Destination in Lahore):</label>
+                    <!-- Google Autocomplete is attached to this input -->
+                    <input type="text" id="endLocation" placeholder="Start typing place (e.g. Packages Mall)..." class="w-full p-2.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                </div>
+
+                <button onclick="calculateGoogleTransitRoute()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs transition shadow-sm cursor-pointer">
+                    <i class="fa-solid fa-route mr-1"></i> Get Google Transit Directions
+                </button>
+
+                <div id="routeRecommendation" class="hidden p-3.5 bg-emerald-50 dark:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-700 rounded-lg text-xs space-y-2">
+                    <p class="font-bold text-emerald-800 dark:text-emerald-300 text-sm"><i class="fa-solid fa-bus mr-1"></i> Trip Overview:</p>
+                    <div id="recText" class="text-gray-700 dark:text-gray-300 leading-relaxed space-y-1"></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Interactive Map & Schedules / Step-by-Step Directions -->
+        <div class="lg:col-span-2 flex flex-col space-y-6">
+            <!-- Map Viewport -->
+            <div id="map" class="rounded-xl shadow-sm h-[50vh] border border-gray-300 dark:border-gray-700 z-10 bg-gray-200 dark:bg-gray-700"></div>
+
+            <!-- Bottom Schedule Board / Turn-by-Turn Panel -->
+            <div id="bottomPanelContainer" class="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 max-h-[30vh] overflow-y-auto">
+                <h3 id="bottomPanelTitle" class="text-md font-semibold text-gray-800 dark:text-gray-200 mb-3"><i class="fa-regular fa-clock mr-2 text-emerald-600"></i>Terminal Departures Schedule</h3>
+                <div id="departureBoard" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+                <div id="transitStepsList" class="hidden text-xs text-gray-600 dark:text-gray-300 space-y-2"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Google Maps JS API (Replace YOUR_GOOGLE_MAPS_API_KEY with your actual Google Cloud key) -->
+    <script async defer src="AIzaSyBZMZDt8UzdWfWJ2i3o0qrLhTCNwBkF2vk"></script>
+
+    <!-- Complete Integrated Script -->
+    <script>
+        const routesData = {
+            electricThokar: {
+                name: "Electric Bus: Khaira Pull to Thokar Niaz Baig",
+                type: "bus", color: "#059669", iconClass: "fa-solid fa-bus",
+                frequency: "Every 10 mins (Electric Feeder Line)", center: [31.5200, 74.3400], zoom: 12,
+                vehicleNames: ["EL-26", "EL-44", "EL-12"],
+                departures: ["06:00 AM", "06:12 AM", "06:25 AM", "06:40 AM", "07:00 AM", "07:15 AM", "07:30 AM", "07:45 AM"],
+                stops: [
+                    { name: "Khaira Pull End / Al Hafeez Garden", time: "0 mins", coords: [31.5850, 74.4500] },
+                    { name: "Sozo Water Park", time: "3 mins", coords: [31.5820, 74.4400] },
+                    { name: "Jallo Park", time: "6 mins", coords: [31.5800, 74.4300] },
+                    { name: "Rizwan Garden / Tulspura / Rani Pind", time: "9 mins", coords: [31.5770, 74.4150] },
+                    { name: "Press Club Society", time: "12 mins", coords: [31.5730, 74.4050] },
+                    { name: "Harbanspura Police Station", time: "14 mins", coords: [31.5710, 74.3980] },
+                    { name: "Harbanspura Bridge & Harbanspura Morr", time: "16 mins", coords: [31.5700, 74.3950] },
+                    { name: "Taj Bagh", time: "19 mins", coords: [31.5680, 74.3880] },
+                    { name: "Canal Bank Society", time: "21 mins", coords: [31.5650, 74.3820] },
+                    { name: "Fateh Garh Pull", time: "23 mins", coords: [31.5630, 74.3780] },
+                    { name: "Nawan Pull", time: "25 mins", coords: [31.5600, 74.3720] },
+                    { name: "Nabi Pura", time: "27 mins", coords: [31.5560, 74.3680] },
+                    { name: "Lal Pull", time: "29 mins", coords: [31.5520, 74.3640] },
+                    { name: "Jafri Pull", time: "31 mins", coords: [31.5490, 74.3600] },
+                    { name: "Mughal Pura", time: "33 mins", coords: [31.5460, 74.3560] },
+                    { name: "Dakkana Phattak", time: "35 mins", coords: [31.5430, 74.3520] },
+                    { name: "Chobucha Pull", time: "37 mins", coords: [31.5400, 74.3480] },
+                    { name: "Dharampura", time: "39 mins", coords: [31.5370, 74.3450] },
+                    { name: "Mall Road", time: "42 mins", coords: [31.5340, 74.3420] },
+                    { name: "G.O.R. / Jail Road", time: "45 mins", coords: [31.5300, 74.3400] },
+                    { name: "Kinnaird College", time: "48 mins", coords: [31.5250, 74.3360] },
+                    { name: "Shah Jamal", time: "50 mins", coords: [31.5200, 74.3330] },
+                    { name: "F.C. College", time: "53 mins", coords: [31.5120, 74.3210] },
+                    { name: "Canal Metro Bus Station", time: "56 mins", coords: [31.5100, 74.3150] },
+                    { name: "New Garden Town", time: "59 mins", coords: [31.5050, 74.3050] },
+                    { name: "Campus Pull", time: "62 mins", coords: [31.4980, 74.2950] },
+                    { name: "Gate No. Four", time: "64 mins", coords: [31.4940, 74.2910] },
+                    { name: "Hailey College", time: "66 mins", coords: [31.4900, 74.2870] },
+                    { name: "IBA Stop", time: "68 mins", coords: [31.4870, 74.2840] },
+                    { name: "Shah Di Khoi", time: "70 mins", coords: [31.4840, 74.2810] },
+                    { name: "CSAS Stop", time: "72 mins", coords: [31.4820, 74.2790] },
+                    { name: "Wafaqi Colony", time: "74 mins", coords: [31.4800, 74.2760] },
+                    { name: "Doctor Hospital", time: "77 mins", coords: [31.4780, 74.2730] },
+                    { name: "PCSIR One", time: "79 mins", coords: [31.4765, 74.2700] },
+                    { name: "Fatimiyya Road", time: "81 mins", coords: [31.4755, 74.2680] },
+                    { name: "Minhaj-ul-Hussain", time: "83 mins", coords: [31.4750, 74.2665] },
+                    { name: "Canal View Gate One", time: "85 mins", coords: [31.4748, 74.2655] },
+                    { name: "Thokar Niaz Baig", time: "88 mins", coords: [31.4746, 74.2647] },
+                    { name: "Jinnah Terminal", time: "92 mins", coords: [31.4730, 74.2620] }
+                ]
+            },
+            speedoShalimar: {
+                name: "Speedo Bus: Shalamar Station to Khaira Pull",
+                type: "bus", color: "#DC2626", iconClass: "fa-solid fa-bus",
+                frequency: "Every 8-10 mins (Continuous Service)", center: [31.5780, 74.4000], zoom: 13,
+                vehicleNames: ["SPD-21", "SPD-09", "SPD-55"],
+                departures: ["06:05 AM", "06:15 AM", "06:30 AM", "06:45 AM", "07:05 AM", "07:20 AM", "07:35 AM", "07:50 AM"],
+                stops: [
+                    { name: "Shalamar Station (Start)", time: "0 mins", coords: [31.5835, 74.3580] },
+                    { name: "Shalamar Chowk", time: "3 mins", coords: [31.5830, 74.3650] },
+                    { name: "Angoori Bagh Scheme", time: "6 mins", coords: [31.5825, 74.3700] },
+                    { name: "Ganda Nala", time: "9 mins", coords: [31.5820, 74.3730] },
+                    { name: "Shalamar Hospital", time: "12 mins", coords: [31.5815, 74.3760] },
+                    { name: "Ramgarh", time: "15 mins", coords: [31.5800, 74.3820] },
+                    { name: "Shah Kamal Road", time: "18 mins", coords: [31.5790, 74.3860] },
+                    { name: "Gunj Bazar", time: "20 mins", coords: [31.5785, 74.3880] },
+                    { name: "Mughal Pura", time: "23 mins", coords: [31.5460, 74.3560] },
+                    { name: "Jafri Pull", time: "26 mins", coords: [31.5490, 74.3600] },
+                    { name: "Lal Pull", time: "28 mins", coords: [31.5520, 74.3640] },
+                    { name: "Nawan Pull", time: "31 mins", coords: [31.5600, 74.3720] },
+                    { name: "Fateh Garh Pull", time: "33 mins", coords: [31.5630, 74.3780] },
+                    { name: "Canal Bank Society", time: "35 mins", coords: [31.5650, 74.3820] },
+                    { name: "Taj Bagh", time: "37 mins", coords: [31.5680, 74.3880] },
+                    { name: "Harbanspura Morr", time: "40 mins", coords: [31.5700, 74.3950] },
+                    { name: "Harbanspura Bridge", time: "42 mins", coords: [31.5705, 74.3965] },
+                    { name: "Harbanspura Police Station", time: "44 mins", coords: [31.5710, 74.3980] },
+                    { name: "Press Club Society", time: "47 mins", coords: [31.5730, 74.4050] },
+                    { name: "Rani Pind", time: "49 mins", coords: [31.5750, 74.4100] },
+                    { name: "Tulspura", time: "52 mins", coords: [31.5760, 74.4120] },
+                    { name: "Rizwan Garden", time: "55 mins", coords: [31.5770, 74.4150] },
+                    { name: "Jallo Park", time: "58 mins", coords: [31.5800, 74.4300] },
+                    { name: "Sozo Water Park", time: "61 mins", coords: [31.5820, 74.4400] },
+                    { name: "Khaira Pull (End)", time: "65 mins", coords: [31.5850, 74.4500] }
+                ]
+            },
+            metrobus: {
+                name: "Lahore Metrobus: Shahdara to Gajjumata",
+                type: "bus", color: "#EA580C", iconClass: "fa-solid fa-bus",
+                frequency: "Every 3-5 mins (Dedicated Rapid Corridor)", center: [31.5100, 74.3400], zoom: 12,
+                vehicleNames: ["MBS-01", "MBS-14", "MBS-29"],
+                departures: ["06:00 AM", "06:04 AM", "06:08 AM", "06:15 AM", "06:22 AM", "06:30 AM", "06:40 AM", "06:50 AM"],
+                stops: [
+                    { name: "Shahdara", time: "0 mins", coords: [31.6100, 74.3050] },
+                    { name: "Niazi Chowk", time: "4 mins", coords: [31.5950, 74.3120] },
+                    { name: "Timber Market", time: "7 mins", coords: [31.5880, 74.3150] },
+                    { name: "Azadi Chowk", time: "10 mins", coords: [31.5820, 74.3180] },
+                    { name: "Bhati Chowk", time: "13 mins", coords: [31.5720, 74.3090] },
+                    { name: "Katchehry", time: "16 mins", coords: [31.5620, 74.3070] },
+                    { name: "Civil Secretariat", time: "19 mins", coords: [31.5530, 74.3080] },
+                    { name: "MAO College", time: "22 mins", coords: [31.5430, 74.3100] },
+                    { name: "Janazgah", time: "25 mins", coords: [31.5380, 74.3140] },
+                    { name: "Qartaba Chowk", time: "28 mins", coords: [31.5330, 74.3180] },
+                    { name: "Shama", time: "31 mins", coords: [31.5270, 74.3210] },
+                    { name: "Ichhra", time: "34 mins", coords: [31.5210, 74.3250] },
+                    { name: "Canal / Muslim Town", time: "37 mins", coords: [31.5100, 74.3310] },
+                    { name: "Gaddafi Stadium", time: "40 mins", coords: [31.5110, 74.3320] },
+                    { name: "Kalma Chowk", time: "43 mins", coords: [31.5113, 74.3330] },
+                    { name: "Model Town", time: "46 mins", coords: [31.4880, 74.3350] },
+                    { name: "Naseerabad", time: "49 mins", coords: [31.4810, 74.3360] },
+                    { name: "Ittefaq Hospital", time: "52 mins", coords: [31.4770, 74.3370] },
+                    { name: "Qainchi", time: "55 mins", coords: [31.4720, 74.3380] },
+                    { name: "Ghazi Chowk", time: "58 mins", coords: [31.4650, 74.3400] },
+                    { name: "Chungi Amar Sidhu", time: "61 mins", coords: [31.4550, 74.3420] },
+                    { name: "Kamahan", time: "64 mins", coords: [31.4420, 74.3440] },
+                    { name: "Atari Saroba", time: "67 mins", coords: [31.4300, 74.3460] },
+                    { name: "Nishtar Colony", time: "70 mins", coords: [31.4200, 74.3480] },
+                    { name: "Youhanabad", time: "73 mins", coords: [31.4100, 74.3490] },
+                    { name: "Dulu Khurd", time: "76 mins", coords: [31.4020, 74.3495] },
+                    { name: "Gajjumata", time: "80 mins", coords: [31.3950, 74.3500] }
+                ]
+            },
+            orangeTrain: {
+                name: "Orange Line Train: Ali Town to Dera Gujran",
+                type: "train", color: "#CA8A04", iconClass: "fa-solid fa-train-subway",
+                frequency: "Every 4 mins (High-Speed Rapid Rail)", center: [31.5400, 74.3300], zoom: 12,
+                vehicleNames: ["OL-TR03", "OL-TR09", "OL-TR15"],
+                departures: ["06:00 AM", "06:04 AM", "06:08 AM", "06:12 AM", "06:16 AM", "06:20 AM", "06:25 AM", "06:30 AM"],
+                stops: [
+                    { name: "Ali Town", time: "0 mins", coords: [31.4680, 74.2550] },
+                    { name: "Thokar Niaz Baig", time: "3 mins", coords: [31.4746, 74.2647] },
+                    { name: "Canal View", time: "6 mins", coords: [31.4850, 74.2780] },
+                    { name: "Hanjarwal", time: "8 mins", coords: [31.4880, 74.2830] },
+                    { name: "Wahdat Road", time: "10 mins", coords: [31.4920, 74.2880] },
+                    { name: "Awan Town", time: "12 mins", coords: [31.4950, 74.2920] },
+                    { name: "Sabzazar", time: "15 mins", coords: [31.5050, 74.3050] },
+                    { name: "Shahnoor", time: "17 mins", coords: [31.5120, 74.3100] },
+                    { name: "Salahuddin Road", time: "19 mins", coords: [31.5180, 74.3150] },
+                    { name: "Bund Road", time: "21 mins", coords: [31.5250, 74.3180] },
+                    { name: "Samanabad", time: "24 mins", coords: [31.5300, 74.3200] },
+                    { name: "Gulshan-e-Ravi", time: "26 mins", coords: [31.5350, 74.3220] },
+                    { name: "Chauburji", time: "29 mins", coords: [31.5430, 74.3100] },
+                    { name: "Anarkali (Underground)", time: "32 mins", coords: [31.5600, 74.3150] },
+                    { name: "GPO (Underground)", time: "34 mins", coords: [31.5630, 74.3220] },
+                    { name: "Lakshmi", time: "36 mins", coords: [31.5680, 74.3260] },
+                    { name: "Railway Station", time: "39 mins", coords: [31.5831, 74.3167] },
+                    { name: "Sultanpura", time: "42 mins", coords: [31.5820, 74.3500] },
+                    { name: "U.E.T", time: "45 mins", coords: [31.5825, 74.3700] },
+                    { name: "Baghbanpura", time: "48 mins", coords: [31.5830, 74.3750] },
+                    { name: "Shalamar Garden", time: "51 mins", coords: [31.5835, 74.3580] },
+                    { name: "Pakistan Mint", time: "54 mins", coords: [31.5850, 74.3900] },
+                    { name: "Mahmood Booti", time: "57 mins", coords: [31.6000, 74.4050] },
+                    { name: "Salamatpura", time: "60 mins", coords: [31.6150, 74.4150] },
+                    { name: "Islam Park", time: "63 mins", coords: [31.6220, 74.4200] },
+                    { name: "Dera Gujran", time: "66 mins", coords: [31.6300, 74.4250] }
+                ]
+            }
+        };
+
+        let leafletMap = null;
+        let googleMap = null;
+        let directionsService = null;
+        let directionsRenderer = null;
+        let autocompleteInstance = null;
+        let currentLayerGroup = null;
+        let simulationTimer = null;
+        let countdownTimer = null;
+        let secondsRemaining = 245;
+        let userLat = 31.5204;
+        let userLng = 74.3587;
+        let activeTab = 'tracker';
+
+        // Initialize Leaflet Map on load
+        window.onload = function() {
+            leafletMap = L.map('map').setView([31.5204, 74.3587], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(leafletMap);
+            currentLayerGroup = L.layerGroup().addTo(leafletMap);
+            
+            switchRoute();
+        };
+
+        // Dark Mode Toggle Logic
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+            const isDark = html.classList.contains('dark');
+            document.getElementById('darkModeIcon').className = isDark ? "fa-solid fa-sun" : "fa-solid fa-moon";
+            document.getElementById('darkModeText').innerText = isDark ? "Light Mode" : "Dark Mode";
+        }
+
+        // Tab Switching Logic
+        function switchTab(tab) {
+            activeTab = tab;
+            const trackerBtn = document.getElementById('tabTrackerBtn');
+            const plannerBtn = document.getElementById('tabPlannerBtn');
+            const trackerView = document.getElementById('trackerView');
+            const plannerView = document.getElementById('plannerView');
+            const departureBoard = document.getElementById('departureBoard');
+            const transitStepsList = document.getElementById('transitStepsList');
+            const bottomPanelTitle = document.getElementById('bottomPanelTitle');
+
+            if (tab === 'tracker') {
+                trackerBtn.className = "py-2 text-xs font-bold rounded-md bg-white dark:bg-gray-600 shadow-sm transition cursor-pointer";
+                plannerBtn.className = "py-2 text-xs font-bold rounded-md text-gray-500 dark:text-gray-300 transition cursor-pointer";
+                trackerView.classList.remove('hidden');
+                plannerView.classList.add('hidden');
+                departureBoard.classList.remove('hidden');
+                transitStepsList.classList.add('hidden');
+                bottomPanelTitle.innerHTML = '<i class="fa-regular fa-clock mr-2 text-emerald-600"></i>Terminal Departures Schedule';
+                
+                switchRoute();
+            } else {
+                plannerBtn.className = "py-2 text-xs font-bold rounded-md bg-white dark:bg-gray-600 shadow-sm transition cursor-pointer";
+                trackerBtn.className = "py-2 text-xs font-bold rounded-md text-gray-500 dark:text-gray-300 transition cursor-pointer";
+                plannerView.classList.remove('hidden');
+                trackerView.classList.add('hidden');
+                departureBoard.classList.add('hidden');
+                transitStepsList.classList.remove('hidden');
+                bottomPanelTitle.innerHTML = '<i class="fa-solid fa-list-ul mr-2 text-emerald-600"></i>Step-by-Step Transit Instructions';
+
+                // Initialize Google Map & Autocomplete if not already active
+                if (!googleMap) {
+                    initGoogleMap();
+                }
+                detectUserGPSLocation();
+            }
+        }
+
+        // Initialize Google Maps API & Places Autocomplete
+        function initGoogleMap() {
+            googleMap = new google.maps.Map(document.getElementById('map'), {
+                center: { lat: userLat, lng: userLng },
+                zoom: 13,
+                styles: [{ featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }]
+            });
+
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer({
+                map: googleMap,
+                panel: document.getElementById('transitStepsList')
+            });
+
+            // Attach Google Places Autocomplete to Destination Input Box
+            const destinationInput = document.getElementById('endLocation');
+            autocompleteInstance = new google.maps.places.Autocomplete(destinationInput, {
+                componentRestrictions: { country: "pk" },
+                fields: ["formatted_address", "geometry", "name"]
+            });
+        }
+
+        // 1. Get User's Live GPS Location
+        function detectUserGPSLocation() {
+            const startInput = document.getElementById('startLocation');
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLat = position.coords.latitude;
+                        userLng = position.coords.longitude;
+                        startInput.value = `My Live GPS (${userLat.toFixed(4)}, ${userLng.toFixed(4)})`;
+                        if (googleMap) {
+                            googleMap.setCenter({ lat: userLat, lng: userLng });
+                            googleMap.setZoom(14);
+                        }
+                    },
+                    () => {
+                        startInput.value = "Lahore Center (GPS permission denied)";
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            } else {
+                startInput.value = "Geolocation not supported";
+            }
+        }
+
+        // 2. Request Google Maps Transit Directions
+        function calculateGoogleTransitRoute() {
+            const destinationQuery = document.getElementById('endLocation').value;
+            const recBox = document.getElementById('routeRecommendation');
+            const recText = document.getElementById('recText');
+
+            if (!destinationQuery) {
+                alert("Please enter or select a destination in Lahore.");
+                return;
+            }
+
+            const request = {
+                origin: { lat: userLat, lng: userLng },
+                destination: destinationQuery,
+                travelMode: google.maps.TravelMode.TRANSIT,
+                transitOptions: {
+                    modes: [google.maps.TransitMode.BUS, google.maps.TransitMode.SUBWAY, google.maps.TransitMode.TRAIN]
+                }
+            };
+
+            directionsService.route(request, (result, status) => {
+                if (status === google.maps.DirectionsStatus.OK) {
+                    directionsRenderer.setDirections(result);
+                    recBox.classList.remove('hidden');
+
+                    const routeLeg = result.routes[0].legs[0];
+                    recText.innerHTML = `
+                        <p>⏱️ <b>Total Travel Time:</b> <span class="text-emerald-600 dark:text-emerald-400 font-bold">${routeLeg.duration.text}</span></p>
+                        <p>📏 <b>Total Distance:</b> ${routeLeg.distance.text}</p>
+                        <p>🚀 <b>From:</b> ${routeLeg.start_address}</p>
+                        <p>🏁 <b>To:</b> ${routeLeg.end_address}</p>
+                    `;
+                } else {
+                    recBox.classList.remove('hidden');
+                    recText.innerHTML = `<span class="text-red-500 font-semibold">Could not find public transit route. Status: ${status}. Try picking a destination from the auto-suggest list.</span>`;
+                    directionsRenderer.set('directions', null);
+                }
+            });
+        }
+
+        // Live Countdown Simulation ticker for Tracker View
+        function startLiveCountdown() {
+            if (countdownTimer) clearInterval(countdownTimer);
+            secondsRemaining = Math.floor(Math.random() * 180) + 120;
+
+            countdownTimer = setInterval(() => {
+                secondsRemaining--;
+                if (secondsRemaining <= 0) secondsRemaining = 300;
+                let mins = Math.floor(secondsRemaining / 60);
+                let secs = secondsRemaining % 60;
+                let badge = document.getElementById('liveCountdownBadge');
+                if (badge) {
+                    badge.innerText = `Arriving in: ${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
+                }
+            }, 1000);
+        }
+
+        // Route Tracker Switcher & Simulator
+        function switchRoute() {
+            if (activeTab !== 'tracker') return;
+            const selectedKey = document.getElementById('routeSelect').value;
+            const route = routesData[selectedKey];
+
+            document.getElementById('stopSearch').value = '';
+            document.getElementById('frequencyText').innerText = route.frequency;
+            
+            const activeVehicleName = route.vehicleNames[Math.floor(Math.random() * route.vehicleNames.length)];
+            document.getElementById('fleetIdText').innerText = activeVehicleName;
+
+            currentLayerGroup.clearLayers();
+            if (simulationTimer) clearInterval(simulationTimer);
+
+            leafletMap.setView(route.center, route.zoom);
+
+            const stopListContainer = document.getElementById('stopList');
+            stopListContainer.innerHTML = '';
+            let latLngs = [];
+
+            route.stops.forEach((stop, index) => {
+                latLngs.push(stop.coords);
+
+                let stopMarker = L.marker(stop.coords).bindPopup("<b>" + stop.name + "</b><br>Travel time: " + stop.time);
+                currentLayerGroup.addLayer(stopMarker);
+
+                let stopCard = document.createElement('div');
+                stopCard.className = "stop-card p-2.5 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition text-xs";
+                stopCard.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium text-gray-800 dark:text-gray-200"><i class="${route.iconClass} mr-1" style="color: ${route.color};"></i> ${index + 1}. ${stop.name}</span>
+                        <span class="font-bold px-2 py-0.5 rounded text-white" style="background-color: ${route.color};">${stop.time}</span>
+                    </div>
+                `;
+
+                stopCard.onclick = function() {
+                    leafletMap.setView(stop.coords, 16);
+                    stopMarker.openPopup();
+                };
+
+                stopListContainer.appendChild(stopCard);
+            });
+
+            let routePolyline = L.polyline(latLngs, { color: route.color, weight: 5, opacity: 0.8, dashArray: '6, 6' });
+            currentLayerGroup.addLayer(routePolyline);
+
+            let vehicleIcon = L.divIcon({
+                className: 'custom-vehicle-icon',
+                html: `<div style="background-color: ${route.color}; color: white; padding: 4px 8px; border-radius: 50px; font-size: 11px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"><i class="${route.iconClass}"></i> ${activeVehicleName}</div>`,
+                iconSize: [90, 28]
+            });
+
+            let currentStopIndex = 0;
+            let vehicleMarker = L.marker(route.stops[0].coords, {icon: vehicleIcon}).bindPopup("<b>Vehicle " + activeVehicleName + "</b><br>In transit along route.");
+            currentLayerGroup.addLayer(vehicleMarker);
+
+            simulationTimer = setInterval(() => {
+                currentStopIndex = (currentStopIndex + 1) % route.stops.length;
+                let nextCoords = route.stops[currentStopIndex].coords;
+                vehicleMarker.setLatLng(nextCoords);
+                vehicleMarker.setPopupContent("<b>Vehicle " + activeVehicleName + "</b><br>Approaching: " + route.stops[currentStopIndex].name);
+            }, 2500);
+
+            const departureBoard = document.getElementById('departureBoard');
+            departureBoard.innerHTML = '';
+            route.departures.forEach(time => {
+                let badge = document.createElement('div');
+                badge.className = "p-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-center font-bold text-gray-700 dark:text-gray-200 text-xs";
+                badge.innerHTML = `<i class="fa-regular fa-clock mr-1" style="color: ${route.color};"></i> ${time}`;
+                departureBoard.appendChild(badge);
+            });
+
+            startLiveCountdown();
+        }
+
+        function filterStops() {
+            const query = document.getElementById('stopSearch').value.toLowerCase();
+            const container = document.getElementById('stopList');
+            const cards = container.getElementsByClassName('stop-card');
+
+            for (let i = 0; i < cards.length; i++) {
+                const cardText = cards[i].textContent.toLowerCase();
+                if (cardText.includes(query)) {
+                    cards[i].style.display = "";
+                } else {
+                    cards[i].style.display = "none";
+                }
+            }
+        }
+    </script>
+</body>
+</html>
